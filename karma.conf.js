@@ -3,7 +3,7 @@ module.exports = function(config) {
     frameworks: ['jasmine'],
     files: [
       'src/**/*.js',
-      'test//**/*_spec.js'
+      'test/**/*_spec.js'
     ],
     preprocessors: {
       'test/**/*.js': ['jshint'],
