@@ -17,5 +17,9 @@
   "scripts": {
     "lint": "jshint src",
     "test": "karma start"
+  },
+  "dependencies": {
+    "jquery": "^3.4.1",
+    "lodash": "^4.17.15"
   }
 }
