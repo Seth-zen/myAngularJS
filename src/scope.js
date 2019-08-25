@@ -15,7 +15,7 @@ module.exports = Scope;
 // in $digest. It's an empty function because when $digest() 
 // first runs it tests if oldValue is different than newValue,
 // so simply having oldValue be 'undefined' could cause unintended
-// results.
+// results if the first new value was also undefined.
 function initWatchVal() { }
 
 
@@ -32,12 +32,12 @@ Scope.prototype.$watch = function(watchFn, listenerFn, valueEq) {
     last: initWatchVal
   };
   // Pushes the watcher object onto $$watchers array in Scope 
-  // prototype.
+  // prototype. 
   this.$$watchers.unshift(watcher);
   this.$$lastDirtyWatch = null;
 
   // When watchers are set, returns this function to be called
-  // later to remove the waters from the $$watchers array.
+  // later to remove the wachers from the $$watchers array.
   return function() {
     var index = self.$$watchers.indexOf(watcher);
     if (index >= 0) {
@@ -49,7 +49,7 @@ Scope.prototype.$watch = function(watchFn, listenerFn, valueEq) {
 
 
 // $digest iterates over all registered watchers in the $$watchers
-// array and calls their watch function and compare its return
+// array and calls their watch function and compares its return
 // value to whatever the same function returned last time. If 
 // the values differ, the watcher is dirty and its lisenerFn will
 // be called.

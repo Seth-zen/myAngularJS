@@ -8,7 +8,8 @@ describe('Scope', function() {
   describe('digest', function() {
     
     var scope;
-
+    // Initializes scope so don't have to repeat
+    // it for each test.
     beforeEach(function() {
       scope = new Scope();
     });
@@ -19,6 +20,7 @@ describe('Scope', function() {
       var listenerFn = jasmine.createSpy();
 
       scope.$watch(watchFn, listenerFn);
+
       scope.$digest();
       expect(listenerFn).toHaveBeenCalled();
     });
@@ -227,7 +229,7 @@ describe('Scope', function() {
 
     it('correctly handles Nans', function() {
 
-      scope.number = 0/0;
+      scope.number = 0/0; // NaN
       scope.counter = 0;
 
       scope.$watch(
