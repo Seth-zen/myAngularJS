@@ -1,6 +1,16 @@
 'use strict'; // set ES5 strict mode on.
 var _ = require('lodash'); // importing lodash to use in this file
 
+function initWatchVal() { }
+
+function isArrayLike(obj) {
+  if (_.isNull(obj) || _.isUndefined(obj)) {
+    return false;
+  }
+  var length = obj.length;
+  return length === 0 || (_.isNumber(length) && length > 0 && (length - 1) in obj);
+}
+
 // Constructor function
 function Scope() {
   this.$$watchers = [];
@@ -14,17 +24,26 @@ function Scope() {
   this.$$phase = null;
 }
 
-// Makes Scope available to require() in other modules/files
-// This is the CommonJS package standard way.
-module.exports = Scope;
-
-// initWatchVal is used in Scope.watcher.last to be oldValue.
-// in $digest. It's an empty function because when $digest() 
-// first runs it tests if oldValue is different than newValue,
-// so simply having oldValue be 'undefined' could cause unintended
-// results if the first new value was also undefined.
-function initWatchVal() { }
-
+Scope.prototype.$new = function(isolated, parent) {
+  var child;
+  parent = parent || this;
+  if (isolated) {
+    child = new Scope();
+    child.$root = parent.$root;
+    child.$$asyncQueue = parent.$$asyncQueue;
+    child.$$postDigestQueue = parent.$$postDigestQueue;
+    child.$$applyAsyncQueue = parent.$$applyAsyncQueue;
+  } else {
+    var ChildScope = function() { }; 
+    ChildScope.prototype = this; 
+    child = new ChildScope();
+  }
+  parent.$$children.push(child);
+  child.$$watchers = [];
+  child.$$children = [];
+  child.$parent = parent;
+  return child;
+};
 
 // $watch takes two functions as arguments, and stores them in 
 // $$watchers array. Every Scope object will have the $watch function
@@ -251,27 +270,6 @@ Scope.prototype.$watchGroup = function(watchFns, listenerFn) {
   };
 };
 
-Scope.prototype.$new = function(isolated, parent) {
-  var child;
-  parent = parent || this;
-  if (isolated) {
-    child = new Scope();
-    child.$root = parent.$root;
-    child.$$asyncQueue = parent.$$asyncQueue;
-    child.$$postDigestQueue = parent.$$postDigestQueue;
-    child.$$applyAsyncQueue = parent.$$applyAsyncQueue;
-  } else {
-    var ChildScope = function() { }; 
-    ChildScope.prototype = this; 
-    child = new ChildScope();
-  }
-  parent.$$children.push(child);
-  child.$$watchers = [];
-  child.$$children = [];
-  child.$parent = parent;
-  return child;
-};
-
 Scope.prototype.$$everyScope = function(fn) {
   if (fn(this)) {
     return this.$$children.every(function(child) {
@@ -292,3 +290,97 @@ Scope.prototype.$destroy = function() {
   }
   this.$$watchers = null;
 };
+
+Scope.prototype.$watchCollection = function(watchFn, listenerFn) {
+  var self = this;
+  var newValue;
+  var oldValue;
+  var oldLength;
+  var veryOldValue;
+  var trackVeryOldValue = (listenerFn.length > 1);
+  var changeCount = 0;
+  var firstRun = true;
+
+  var internalWatchFn = function(scope) {
+    var newLength;
+
+    newValue = watchFn(scope);
+    if (_.isObject(newValue)) {
+      if (isArrayLike(newValue)) {
+        if (!_.isArray(oldValue)) {
+          changeCount++;
+          oldValue = [];
+        }
+        if (newValue.length !== oldValue.length) {
+          changeCount++;
+          oldValue.length = newValue.length;
+        }
+        _.forEach(newValue, function(newItem, i) {
+          var bothNaN = _.isNaN(newItem) && _.isNaN(oldValue[i]);
+          if (!bothNaN && newItem !== oldValue[i]) {
+            changeCount++;
+            oldValue[i] = newItem;
+          }
+        });
+      } else {
+        if (!_.isObject(oldValue) || isArrayLike(oldValue)) {
+          changeCount++;
+          oldValue = {};
+          oldLength = 0;
+        }
+        newLength = 0;
+        _.forOwn(newValue, function(newVal, key) {
+          newLength++;
+          if (oldValue.hasOwnProperty(key)) {
+            var bothNaN = _.isNaN(newVal) && _.isNaN(oldValue[key]);
+            if (!bothNaN && oldValue[key] !== newVal) {
+              changeCount++;
+              oldValue[key] = newVal;
+            }
+          } else {
+            changeCount++;
+            oldLength++;
+            oldValue[key] = newVal;
+          }
+        });
+        if (oldLength > newLength) {
+          changeCount++;
+          _.forOwn(oldValue, function(oldVal, key) {
+            if (!newValue.hasOwnProperty(key)) {
+              oldLength--;
+              delete oldValue[key];
+            }
+          });
+        }
+      }
+    } else {
+      if (!self.$$areEqual(newValue, oldValue, false)) {
+        changeCount++;
+      }
+      oldValue = newValue;
+    }
+
+    return changeCount;
+  };
+
+  var internalListenerFn = function() {
+    if (firstRun) {
+      listenerFn(newValue, newValue, self);
+      firstRun = false;
+    } else {
+      listenerFn(newValue, veryOldValue, self);
+    }
+    if (trackVeryOldValue) {
+      veryOldValue = _.clone(newValue);
+    }
+  };
+
+  return this.$watch(internalWatchFn, internalListenerFn);
+};
+
+
+
+
+
+
+module.exports = Scope;
